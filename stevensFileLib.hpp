@@ -1,346 +1,376 @@
 /**
  * @file stevensFileLib.hpp
- * @author your name (jeff@bucephalusstudios.com)
- * @brief A cool library for working with files
- * @version 0.1
+ * @author Jeff Stevens (jeff@bucephalusstudios.com)
+ * @brief A library for working with files and directories
+ * @version 0.2
  * @date 2024-02-21
- * 
+ *
  * @copyright Copyright (c) 2024
- * 
+ *
  */
 
-#include "stevensStringLib.h"
+#ifndef STEVENS_FILE_LIB_HPP
+#define STEVENS_FILE_LIB_HPP
+
 #include <unordered_map>
 #include <unordered_set>
 #include <fstream>
 #include <filesystem>
+#include <vector>
+#include <string>
+#include <stdexcept>
+#include <random>
+#include <algorithm>
+#include <sstream>
 
 namespace stevensFileLib
 {
+    // ============================================================================
+    // Configuration Structures
+    // ============================================================================
+
     /**
-     * @brief Given a filepath, opens a file and returns the input file stream object associated with the opened file.
-     *        Performs checks during opening to make sure that the file exists.
-     * 
-     * @return std::ifstream - The input file stream object representing the file
+     * @brief Configuration for loading files into vectors
      */
-    std::ifstream openInputFile( const std::string & filePath )
+    struct LoadSettings
+    {
+        std::vector<std::string> skipIfStartsWith;
+        std::vector<std::string> skipIfContains;
+        bool skipEmptyLines = true;
+        char separator = '\n';
+
+        LoadSettings() = default;
+
+        LoadSettings(const std::unordered_map<std::string, std::vector<std::string>>& settingsMap,
+                    char sep = '\n', bool skipEmpty = true)
+            : skipEmptyLines(skipEmpty), separator(sep)
+        {
+            auto startsWith = settingsMap.find("skip if starts with");
+            if (startsWith != settingsMap.end())
+                skipIfStartsWith = startsWith->second;
+
+            auto contains = settingsMap.find("skip if contains");
+            if (contains != settingsMap.end())
+                skipIfContains = contains->second;
+        }
+    };
+
+    /**
+     * @brief Configuration for listing files in directories
+     */
+    struct ListFilesSettings
+    {
+        std::unordered_set<std::string> targetExtensions;
+        std::unordered_set<std::string> excludeExtensions;
+        std::unordered_set<std::string> excludeFiles;
+
+        ListFilesSettings() = default;
+
+        static ListFilesSettings fromMap(const std::unordered_map<std::string, std::string>& settingsMap)
+        {
+            ListFilesSettings settings;
+
+            auto target = settingsMap.find("targetFileExtensions");
+            if (target != settingsMap.end() && !target->second.empty())
+                settings.targetExtensions = parseCommaSeparated(target->second);
+
+            auto exclude = settingsMap.find("excludeFileExtensions");
+            if (exclude != settingsMap.end() && !exclude->second.empty())
+                settings.excludeExtensions = parseCommaSeparated(exclude->second);
+
+            auto excludeFilesEntry = settingsMap.find("excludeFiles");
+            if (excludeFilesEntry != settingsMap.end() && !excludeFilesEntry->second.empty())
+                settings.excludeFiles = parseCommaSeparated(excludeFilesEntry->second);
+
+            return settings;
+        }
+
+    private:
+        static std::unordered_set<std::string> parseCommaSeparated(const std::string& input)
+        {
+            std::unordered_set<std::string> result;
+            std::stringstream stream(input);
+            std::string item;
+
+            while (std::getline(stream, item, ','))
+            {
+                if (!item.empty())
+                    result.insert(item);
+            }
+
+            return result;
+        }
+    };
+
+    // ============================================================================
+    // Internal String Utilities (to remove external dependency)
+    // ============================================================================
+
+    namespace internal
+    {
+        inline bool startsWith(const std::string& str, const std::string& prefix)
+        {
+            if (prefix.size() > str.size())
+                return false;
+            return str.compare(0, prefix.size(), prefix) == 0;
+        }
+
+        inline bool contains(const std::string& str, const std::string& substring)
+        {
+            return str.find(substring) != std::string::npos;
+        }
+
+        inline std::vector<std::string> splitString(const std::string& str, const std::string& delimiter)
+        {
+            std::vector<std::string> result;
+            size_t start = 0;
+            size_t end = str.find(delimiter);
+
+            while (end != std::string::npos)
+            {
+                result.push_back(str.substr(start, end - start));
+                start = end + delimiter.length();
+                end = str.find(delimiter, start);
+            }
+
+            result.push_back(str.substr(start));
+            return result;
+        }
+    }
+
+    // ============================================================================
+    // File Opening Functions
+    // ============================================================================
+
+    /**
+     * @brief Opens a file for reading with validation
+     *
+     * @param filePath Path to the file
+     * @return std::ifstream Input file stream object
+     * @throws std::invalid_argument if file cannot be opened
+     */
+    inline std::ifstream openInputFile(const std::string& filePath)
     {
         std::ifstream file(filePath);
         if (!file.is_open())
-        {
-            //Error if we could not find the file
-            throw std::invalid_argument("Failed to find file");
-        }
+            throw std::invalid_argument("Failed to open file for reading: " + filePath);
         return file;
     }
 
-
     /**
-     * @brief Given a path to a file, open the file for output, returning an output filestream object.
-     * 
-     * @return std::ofstream - The output file stream object representing the file
+     * @brief Opens a file for appending with validation
+     *
+     * @param filePath Path to the file
+     * @return std::ofstream Output file stream object
+     * @throws std::invalid_argument if file cannot be opened
      */
-    std::ofstream openOutputFile( const std::string & filePath )
+    inline std::ofstream openOutputFile(const std::string& filePath)
     {
         std::ofstream file(filePath, std::ios::app);
         if (!file.is_open())
-        {
-            //Error if we could not find the file
-            throw std::invalid_argument("Failed to find file");
-        }
+            throw std::invalid_argument("Failed to open file for writing: " + filePath);
         return file;
     }
 
+    // ============================================================================
+    // File Writing Functions
+    // ============================================================================
 
     /**
-     * @brief Given a path to a file and some content to append to it, append the content to the end of the file.
-     * 
-     * @return void
+     * @brief Appends content to a file, optionally creating it if it doesn't exist
+     *
+     * @tparam ContentType Type of content to append (must support operator<<)
+     * @param filePath Path to the file
+     * @param content Content to append
+     * @param createIfNonExistent If true, creates the file if it doesn't exist
+     * @throws std::invalid_argument if file doesn't exist and createIfNonExistent is false
+     * @throws std::runtime_error if file creation fails
      */
     template<typename ContentType>
-    void appendToFile(  const std::string & filePath,
-                        const ContentType & contentToAppend,
-                        const bool createIfNonExistent = true )
+    void appendToFile(const std::string& filePath, const ContentType& content,
+                     bool createIfNonExistent = true)
     {
-        //Open a file for output 
-        std::ofstream file;
-        try
-        {
-            file = openOutputFile( filePath );
-        }
-        catch( const std::invalid_argument& )
-        {
-            if ( createIfNonExistent )
-            {
-                //Create a new file if we can't find one
-                std::ofstream newFile(filePath);
-                if (!newFile)
-                {
-                    throw std::runtime_error("Failed to create file");
-                }
-                newFile << contentToAppend;
-                newFile.close();
-                return;
-            } 
-            else 
-            {
-                throw; // Re-throw the original exception
-            }
-        }
-        
-        //Append the contentToAppend
-        file << contentToAppend;
+        // Check if file exists when createIfNonExistent is false
+        if (!createIfNonExistent && !std::filesystem::exists(filePath))
+            throw std::invalid_argument("File does not exist: " + filePath);
 
-        //Close the file
-        file.close();
+        std::ofstream file(filePath, std::ios::app);
+        if (!file.is_open())
+            throw std::runtime_error("Failed to open file for writing: " + filePath);
+
+        file << content;
     }
 
+    // ============================================================================
+    // Line Filtering Helper Functions
+    // ============================================================================
+
+    namespace internal
+    {
+        inline bool shouldSkipLine(const std::string& line, const LoadSettings& settings)
+        {
+            if (settings.skipEmptyLines && line.empty())
+                return true;
+
+            for (const auto& prefix : settings.skipIfStartsWith)
+            {
+                if (startsWith(line, prefix))
+                    return true;
+            }
+
+            for (const auto& substring : settings.skipIfContains)
+            {
+                if (contains(line, substring))
+                    return true;
+            }
+
+            return false;
+        }
+
+        inline bool shouldIncludeFile(const std::filesystem::path& filePath,
+                                     const ListFilesSettings& settings)
+        {
+            const std::string filename = filePath.filename().string();
+            const std::string extension = filePath.extension().string();
+
+            if (settings.excludeFiles.count(filename) > 0)
+                return false;
+
+            if (!settings.targetExtensions.empty())
+                return settings.targetExtensions.count(extension) > 0;
+
+            if (!settings.excludeExtensions.empty())
+                return settings.excludeExtensions.count(extension) == 0;
+
+            return true;
+        }
+    }
+
+    // ============================================================================
+    // File Reading Functions
+    // ============================================================================
 
     /**
-     * @brief Given a file, load its contents line-by-line into a vector of strings.
-     * 
-     * @param filePath - The string path to the file that we want to load into a vector.
-     * @param settings - An unordered_map cof strings keys and values of vectors of strings containing settings
-     *                   to further specify how you want to load the file into the vector. 
-     *                   Possible key-value pairs and their effects are:
-     *                   "skip if starts with" : a vector of strings that we will check to see if a line begins with them. If a line begins with any in the vector, the line is skipped.
-     *                   "skip if contains" : a vector of strings that we will check to see if they are contained within the line. If a line contains any in the vector, the line is skipped.
-     * @param separator - A character that we will use to separate the lines of the file.
-     * @param skipEmptyLines - If true, skip lines that are empty.
-     * 
-     * @return std::vector<std::string> A vector of strings with the data from the file pushed back into it, line-by-line.
+     * @brief Loads file contents line-by-line into a vector of strings
+     *
+     * @param filePath Path to the file
+     * @param settingsMap Settings for filtering lines (see LoadSettings)
+     * @param separator Character used to separate lines
+     * @param skipEmptyLines If true, skip empty lines
+     * @return std::vector<std::string> Vector containing file lines
+     * @throws std::invalid_argument if file cannot be opened
      */
-    std::vector<std::string> loadFileIntoVector(    const std::string & filePath,
-                                                    std::unordered_map< std::string, std::vector<std::string> > settings = {},
-                                                    const char separator = '\n',
-                                                    bool skipEmptyLines = true  )
+    inline std::vector<std::string> loadFileIntoVector(
+        const std::string& filePath,
+        const std::unordered_map<std::string, std::vector<std::string>>& settingsMap = {},
+        char separator = '\n',
+        bool skipEmptyLines = true)
     {
-        //Open the file with safety checks
-        std::ifstream file = stevensFileLib::openInputFile(filePath);
+        std::ifstream file = openInputFile(filePath);
+        LoadSettings settings(settingsMap, separator, skipEmptyLines);
 
-        std::vector<std::string> vec; 
+        std::vector<std::string> lines;
         std::string line;
-        bool skip;
-        //Iterate through the file by pushing each individual line into vec
-        while(getline(file, line, separator))
-        {
-            skip = false;
-            //Check to see if we can add the line to the vector
-            if(skipEmptyLines)
-            {
-                if(line.empty())
-                {
-                    continue;
-                }
-            }
-            if(settings.contains("skip if starts with"))
-            {
-                for(int i = 0; i < settings["skip if starts with"].size(); i++)
-                {
-                    if(stevensStringLib::startsWith(line, settings["skip if starts with"][i]))
-                    {
-                        skip = true;
-                        break;
-                    }
-                }
-                if(skip)
-                {
-                    continue;
-                }
-            }
-            if(settings.contains("skip if contains"))
-            {
-                for(int i = 0; i < settings["skip if contains"].size(); i++)
-                {
-                    if(stevensStringLib::contains(line, settings["skip if contains"][i]))
-                    {
-                        skip = true;
-                        break;
-                    }
-                }
-                if(skip)
-                {
-                    continue;
-                }
-            }
 
-            //Add the line to the vector
-            vec.push_back(line);
+        while (std::getline(file, line, separator))
+        {
+            if (!internal::shouldSkipLine(line, settings))
+                lines.push_back(line);
         }
 
-        file.close();
-
-        //Return the vector, now full of content from the file
-        return vec;
+        return lines;
     }
 
-
     /**
-     * @brief Given a file, load its contents line-by-line into a vector of ints.
-     * 
-     * @param filePath - The string path to the file that we want to load into a vector.
-     * @param settings - An ma of string keys and values of vectors of strings containing settings
-     *                   to further specify how you want to load the file into the vector. 
-     * @param skipEmptyLines - If true, skip lines that are empty.
+     * @brief Loads file contents into a vector of integers
+     *
+     * @param filePath Path to the file
+     * @param settingsMap Settings for filtering lines (currently unused but kept for API compatibility)
+     * @param separator Character used to separate values
+     * @param skipEmptyLines If true, skip empty lines
+     * @return std::vector<int> Vector containing integer values
+     * @throws std::invalid_argument if file cannot be opened
      */
-    std::vector<int> loadFileIntoVectorOfInts(  const std::string & filePath,
-                                                const std::unordered_map< std::string, std::vector<std::string> > settings = {},
-                                                const char separator = '\n',
-                                                const bool skipEmptyLines = true)
+    inline std::vector<int> loadFileIntoVectorOfInts(
+        const std::string& filePath,
+        [[maybe_unused]] const std::unordered_map<std::string, std::vector<std::string>>& settingsMap = {},
+        [[maybe_unused]] char separator = '\n',
+        [[maybe_unused]] bool skipEmptyLines = true)
     {
+        std::ifstream file = openInputFile(filePath);
+        std::vector<int> numbers;
+        int value;
 
-        //Open the file with safety checks
-        std::ifstream file = stevensFileLib::openInputFile( filePath );
+        while (file >> value)
+            numbers.push_back(value);
 
-        //Declare the vector that we'll be pushing our integer data back into from the file
-        std::vector<int> vec;
-        //As well as the variable that holds the integer data
-        int data;
-        //Use the stream operator to take each line of the file and load it into vec
-        while(file >> data)
-        {
-            vec.push_back(data);
-        }
-
-        //Complete the cleanup by closing the file
-        file.close();
-
-        //Return the vector, now full of content from the file
-        return vec;
+        return numbers;
     }
 
-
     /**
-     * @brief Given a file name, return the contents of a random line in the named file.
-     * 
-     * @param filePath The path of the file we want to get the content of a random line from.
-     * @param separator The character used to separate lines of the file.
-     * 
-     * @return A std::string variable containing a random line of file content
+     * @brief Returns a random line from a file
+     *
+     * @param filePath Path to the file
+     * @param separator Character used to separate lines
+     * @return std::string A random line from the file
+     * @throws std::invalid_argument if file cannot be opened
+     * @throws std::runtime_error if file is empty
      */
-    std::string getRandomFileLine(  const std::string & filePath,
-                                    const char & separator = '\n' )
+    inline std::string getRandomFileLine(const std::string& filePath, char separator = '\n')
     {
-        //Load the file into a vector
-        std::vector<std::string> fileLines = loadFileIntoVector(filePath, {}, separator, false);
-        //Get a random line number in the range of 0 to the line count
-        unsigned long long int randomLineNumber = rand() % fileLines.size();
-        //Return the content of the random line
-        return fileLines[randomLineNumber];
+        std::vector<std::string> lines = loadFileIntoVector(filePath, {}, separator, false);
+
+        if (lines.empty())
+            throw std::runtime_error("Cannot get random line from empty file: " + filePath);
+
+        static std::random_device randomDevice;
+        static std::mt19937 generator(randomDevice());
+        std::uniform_int_distribution<size_t> distribution(0, lines.size() - 1);
+
+        return lines[distribution(generator)];
     }
 
+    // ============================================================================
+    // Directory Functions
+    // ============================================================================
 
     /**
-     * @brief Given a directory path, return a vector of all of the file names in the directory.
+     * @brief Lists all files in a directory with optional filtering
+     *
+     * @param directoryPath Path to the directory
+     * @param settingsMap Settings for filtering files (see ListFilesSettings)
+     * @return std::vector<std::string> Vector of filenames
+     * @throws std::invalid_argument if directory doesn't exist
      */
-    std::vector<std::string> listFiles( const std::string & directoryPath,
-                                        const std::unordered_map<std::string, std::string> & settings = {   { "targetFileExtensions",   ""  },
-                                                                                                            { "excludeFileExtensions",  ""  },
-                                                                                                            { "excludeFiles",  ""           }   } )
+    inline std::vector<std::string> listFiles(
+        const std::string& directoryPath,
+        const std::unordered_map<std::string, std::string>& settingsMap = {
+            {"targetFileExtensions", ""},
+            {"excludeFileExtensions", ""},
+            {"excludeFiles", ""}
+        })
     {
-        //Check if the directory exists
-        if (!std::filesystem::exists(directoryPath) || !std::filesystem::is_directory(directoryPath))
+        if (!std::filesystem::exists(directoryPath) ||
+            !std::filesystem::is_directory(directoryPath))
         {
             throw std::invalid_argument("Directory does not exist: " + directoryPath);
         }
 
-        //Based on the values of the settings map, determine what file extensions we want to include and exclude
-        std::unordered_set<std::string> targetFileExtensions;
-        if( settings.contains("targetFileExtensions") )
+        ListFilesSettings settings = ListFilesSettings::fromMap(settingsMap);
+        std::vector<std::string> fileNames;
+
+        for (const auto& entry : std::filesystem::directory_iterator(directoryPath))
         {
-            if( !settings.at("targetFileExtensions").empty() )
-            {
-                //If the target file extensions are not empty, we will only include files with those extensions
-                std::vector<std::string> targetFileExtensionsVec = stevensStringLib::separate(settings.at("targetFileExtensions"), ",");
-                targetFileExtensions = std::unordered_set<std::string>(targetFileExtensionsVec.begin(), targetFileExtensionsVec.end());
-            }
-        }
-        std::unordered_set<std::string> excludeFileExtensions;
-        if( settings.contains("excludeFileExtensions") )
-        {
-            if( !settings.at("excludeFileExtensions").empty() )
-            {
-                //If the exclude file extensions are not empty, we will only include files with those extensions
-                std::vector<std::string> excludeFileExtensionsVec = stevensStringLib::separate(settings.at("excludeFileExtensions"), ",");
-                excludeFileExtensions = std::unordered_set<std::string>(excludeFileExtensionsVec.begin(), excludeFileExtensionsVec.end());
-            }
-        }
-        //Check if we have any files to exclude
-        std::unordered_set<std::string> excludeFiles;
-        if( settings.contains("excludeFiles") )
-        {
-            if( !settings.at("excludeFiles").empty() )
-            {
-                //If we've specified files to exclude, set that up here
-                std::vector<std::string> excludeFilesVec = stevensStringLib::separate(settings.at("excludeFiles"), ",");
-                excludeFiles = std::unordered_set<std::string>(excludeFilesVec.begin(), excludeFilesVec.end());
-            }
+            if (!entry.is_regular_file())
+                continue;
+
+            if (internal::shouldIncludeFile(entry.path(), settings))
+                fileNames.push_back(entry.path().filename().string());
         }
 
-        //Iterate through the directory and get all of the files
-        std::vector<std::string> fileNames;
-        for (const auto & entry : std::filesystem::directory_iterator(directoryPath))
-        {
-            if (entry.is_regular_file())
-            {
-                //First, we see if this is a particular file we want to exclude from our listing
-                if( !excludeFiles.empty() )
-                {
-                    //If we have files to exclude, check if the current file is in the excludeFiles set
-                    if( excludeFiles.contains(entry.path().filename().string()) )
-                    {
-                        continue; //Skip this file
-                    }
-                }
-                //Now we know this file is a candidate for inclusion in our list, check its file extension
-                if( !targetFileExtensions.empty() )
-                {
-                    //If we have target file extensions, check if the current file does not have one of them
-                    std::string fileExtension = entry.path().extension().string();
-                    if( !targetFileExtensions.contains(fileExtension) )
-                    {
-                        continue; //Skip this file -- It doesn't have a target file extension
-                    }
-                }
-                else if( !excludeFileExtensions.empty() )
-                {
-                    //If we have exclude file extensions, check if the current file has one of them
-                    std::string fileExtension = entry.path().extension().string();
-                    if( excludeFileExtensions.contains(fileExtension) )
-                    {
-                        continue; //Skip this file -- It has an excluded file extension
-                    }
-                }
-                
-                fileNames.push_back(entry.path().filename().string());
-            }
-        }
-        
         return fileNames;
     }
 
+} // namespace stevensFileLib
 
-    // /**
-    //  * Given the path to a file, count how many lines are in the file and return the integer count.
-    //  * 
-    //  * @param filePath - The path to the file we want to count the number of lines of.
-    //  * 
-    //  * @retval int - The integer number of lines that the file contains.
-    // */
-    // inline int countFileLines(const std::string & filePath)
-    // {
-    //     //Create an input stream from the file we are trying to print
-    //     std::ifstream input_file(filePath);
-    //     if (!input_file.is_open())
-    //     {
-    //         //Error if we cannot successfully print the file
-    //         throw std::invalid_argument("Error, could not find file: " + filePath);
-    //     }
-    //     //Store the text content of the file in a string
-    //     std::string fileContent = std::string((std::istreambuf_iterator<char>(input_file)), std::istreambuf_iterator<char>());
-    //     input_file.close();
-
-    //     return countLines(fileContent);
-    // }
-
-}
+#endif // STEVENS_FILE_LIB_HPP
