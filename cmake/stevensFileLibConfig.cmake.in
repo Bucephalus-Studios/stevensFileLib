@@ -1,5 +1,0 @@
-@PACKAGE_INIT@
-
-include("${CMAKE_CURRENT_LIST_DIR}/stevensFileLibTargets.cmake")
-
-check_required_components(stevensFileLib)

@@ -78,7 +78,7 @@ private:
 // Benchmarks for loadFileIntoVector
 // ============================================================================
 
-static void BM_LoadFileIntoVector_SmallFile(benchmark::State& state)
+static void LoadFileIntoVector_SmallFile(benchmark::State& state)
 {
     for (auto _ : state)
     {
@@ -86,9 +86,9 @@ static void BM_LoadFileIntoVector_SmallFile(benchmark::State& state)
         benchmark::DoNotOptimize(lines);
     }
 }
-BENCHMARK(BM_LoadFileIntoVector_SmallFile);
+BENCHMARK(LoadFileIntoVector_SmallFile);
 
-static void BM_LoadFileIntoVector_MediumFile(benchmark::State& state)
+static void LoadFileIntoVector_MediumFile(benchmark::State& state)
 {
     for (auto _ : state)
     {
@@ -96,9 +96,9 @@ static void BM_LoadFileIntoVector_MediumFile(benchmark::State& state)
         benchmark::DoNotOptimize(lines);
     }
 }
-BENCHMARK(BM_LoadFileIntoVector_MediumFile);
+BENCHMARK(LoadFileIntoVector_MediumFile);
 
-static void BM_LoadFileIntoVector_LargeFile(benchmark::State& state)
+static void LoadFileIntoVector_LargeFile(benchmark::State& state)
 {
     for (auto _ : state)
     {
@@ -106,9 +106,9 @@ static void BM_LoadFileIntoVector_LargeFile(benchmark::State& state)
         benchmark::DoNotOptimize(lines);
     }
 }
-BENCHMARK(BM_LoadFileIntoVector_LargeFile);
+BENCHMARK(LoadFileIntoVector_LargeFile);
 
-static void BM_LoadFileIntoVector_WithFiltering(benchmark::State& state)
+static void LoadFileIntoVector_WithFiltering(benchmark::State& state)
 {
     std::unordered_map<std::string, std::vector<std::string>> settings;
     settings["skip if starts with"] = {"#", "//"};
@@ -120,13 +120,13 @@ static void BM_LoadFileIntoVector_WithFiltering(benchmark::State& state)
         benchmark::DoNotOptimize(lines);
     }
 }
-BENCHMARK(BM_LoadFileIntoVector_WithFiltering);
+BENCHMARK(LoadFileIntoVector_WithFiltering);
 
 // ============================================================================
 // Benchmarks for loadFileIntoVectorOfInts
 // ============================================================================
 
-static void BM_LoadFileIntoVectorOfInts(benchmark::State& state)
+static void LoadFileIntoVectorOfInts(benchmark::State& state)
 {
     for (auto _ : state)
     {
@@ -134,13 +134,13 @@ static void BM_LoadFileIntoVectorOfInts(benchmark::State& state)
         benchmark::DoNotOptimize(numbers);
     }
 }
-BENCHMARK(BM_LoadFileIntoVectorOfInts);
+BENCHMARK(LoadFileIntoVectorOfInts);
 
 // ============================================================================
 // Benchmarks for appendToFile
 // ============================================================================
 
-static void BM_AppendToFile(benchmark::State& state)
+static void AppendToFile(benchmark::State& state)
 {
     std::string testFile = "benchmark_data/append_test.txt";
     {
@@ -154,9 +154,9 @@ static void BM_AppendToFile(benchmark::State& state)
 
     fs::remove(testFile);
 }
-BENCHMARK(BM_AppendToFile);
+BENCHMARK(AppendToFile);
 
-static void BM_AppendToFile_LargeContent(benchmark::State& state)
+static void AppendToFile_LargeContent(benchmark::State& state)
 {
     std::string testFile = "benchmark_data/append_large_test.txt";
     {
@@ -173,13 +173,13 @@ static void BM_AppendToFile_LargeContent(benchmark::State& state)
 
     fs::remove(testFile);
 }
-BENCHMARK(BM_AppendToFile_LargeContent);
+BENCHMARK(AppendToFile_LargeContent);
 
 // ============================================================================
 // Benchmarks for getRandomFileLine
 // ============================================================================
 
-static void BM_GetRandomFileLine_SmallFile(benchmark::State& state)
+static void GetRandomFileLine_SmallFile(benchmark::State& state)
 {
     for (auto _ : state)
     {
@@ -187,9 +187,9 @@ static void BM_GetRandomFileLine_SmallFile(benchmark::State& state)
         benchmark::DoNotOptimize(line);
     }
 }
-BENCHMARK(BM_GetRandomFileLine_SmallFile);
+BENCHMARK(GetRandomFileLine_SmallFile);
 
-static void BM_GetRandomFileLine_MediumFile(benchmark::State& state)
+static void GetRandomFileLine_MediumFile(benchmark::State& state)
 {
     for (auto _ : state)
     {
@@ -197,13 +197,13 @@ static void BM_GetRandomFileLine_MediumFile(benchmark::State& state)
         benchmark::DoNotOptimize(line);
     }
 }
-BENCHMARK(BM_GetRandomFileLine_MediumFile);
+BENCHMARK(GetRandomFileLine_MediumFile);
 
 // ============================================================================
 // Benchmarks for listFiles
 // ============================================================================
 
-static void BM_ListFiles_NoFilter(benchmark::State& state)
+static void ListFiles_NoFilter(benchmark::State& state)
 {
     for (auto _ : state)
     {
@@ -211,9 +211,9 @@ static void BM_ListFiles_NoFilter(benchmark::State& state)
         benchmark::DoNotOptimize(files);
     }
 }
-BENCHMARK(BM_ListFiles_NoFilter);
+BENCHMARK(ListFiles_NoFilter);
 
-static void BM_ListFiles_WithTargetExtension(benchmark::State& state)
+static void ListFiles_WithTargetExtension(benchmark::State& state)
 {
     std::unordered_map<std::string, std::string> settings;
     settings["targetFileExtensions"] = ".txt";
@@ -224,9 +224,9 @@ static void BM_ListFiles_WithTargetExtension(benchmark::State& state)
         benchmark::DoNotOptimize(files);
     }
 }
-BENCHMARK(BM_ListFiles_WithTargetExtension);
+BENCHMARK(ListFiles_WithTargetExtension);
 
-static void BM_ListFiles_WithExcludeExtension(benchmark::State& state)
+static void ListFiles_WithExcludeExtension(benchmark::State& state)
 {
     std::unordered_map<std::string, std::string> settings;
     settings["excludeFileExtensions"] = ".cpp,.hpp";
@@ -237,9 +237,9 @@ static void BM_ListFiles_WithExcludeExtension(benchmark::State& state)
         benchmark::DoNotOptimize(files);
     }
 }
-BENCHMARK(BM_ListFiles_WithExcludeExtension);
+BENCHMARK(ListFiles_WithExcludeExtension);
 
-static void BM_ListFiles_WithMultipleFilters(benchmark::State& state)
+static void ListFiles_WithMultipleFilters(benchmark::State& state)
 {
     std::unordered_map<std::string, std::string> settings;
     settings["targetFileExtensions"] = ".txt,.cpp";
@@ -251,7 +251,7 @@ static void BM_ListFiles_WithMultipleFilters(benchmark::State& state)
         benchmark::DoNotOptimize(files);
     }
 }
-BENCHMARK(BM_ListFiles_WithMultipleFilters);
+BENCHMARK(ListFiles_WithMultipleFilters);
 
 // ============================================================================
 // Main function with setup and teardown
