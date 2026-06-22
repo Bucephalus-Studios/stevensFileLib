@@ -9,8 +9,7 @@
  *
  */
 
-#ifndef STEVENS_FILE_LIB_HPP
-#define STEVENS_FILE_LIB_HPP
+#pragma once
 
 #include <unordered_map>
 #include <unordered_set>
@@ -307,6 +306,25 @@ namespace stevensFileLib
         return numbers;
     }
 
+
+    inline std::string loadFileToString(const std::string& filepath)
+    {
+        std::ifstream file(filepath, std::ios::in | std::ios::binary);
+        if (!file)
+            throw std::runtime_error("Failed to open file: " + filepath);
+
+        // Read entire file into string
+        file.seekg(0, std::ios::end);
+        std::size_t size = file.tellg();
+        file.seekg(0, std::ios::beg);
+
+        std::string buffer(size, '\0');
+        file.read(buffer.data(), size);
+
+        return buffer;
+    }
+
+
     /**
      * @brief Returns a random line from a file
      *
@@ -373,4 +391,3 @@ namespace stevensFileLib
 
 } // namespace stevensFileLib
 
-#endif // STEVENS_FILE_LIB_HPP
