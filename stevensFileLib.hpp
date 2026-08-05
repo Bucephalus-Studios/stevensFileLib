@@ -29,7 +29,9 @@ namespace stevensFileLib
     // ============================================================================
 
     /**
-     * @brief Configuration for loading files into vectors
+     * @brief Configuration for loading files into vectors. A plain aggregate so callers can use
+     *        designated initializers for readability, e.g.:
+     *          loadFileIntoVector(path, {.skipIfStartsWith = {"#"}});
      */
     struct LoadSettings
     {
@@ -37,21 +39,6 @@ namespace stevensFileLib
         std::vector<std::string> skipIfContains;
         bool skipEmptyLines = true;
         char separator = '\n';
-
-        LoadSettings() = default;
-
-        LoadSettings(const std::unordered_map<std::string, std::vector<std::string>>& settingsMap,
-                    char sep = '\n', bool skipEmpty = true)
-            : skipEmptyLines(skipEmpty), separator(sep)
-        {
-            auto startsWith = settingsMap.find("skip if starts with");
-            if (startsWith != settingsMap.end())
-                skipIfStartsWith = startsWith->second;
-
-            auto contains = settingsMap.find("skip if contains");
-            if (contains != settingsMap.end())
-                skipIfContains = contains->second;
-        }
     };
 
     /**
@@ -253,25 +240,20 @@ namespace stevensFileLib
      * @brief Loads file contents line-by-line into a vector of strings
      *
      * @param filePath Path to the file
-     * @param settingsMap Settings for filtering lines (see LoadSettings)
-     * @param separator Character used to separate lines
-     * @param skipEmptyLines If true, skip empty lines
+     * @param settings Settings for filtering lines (see LoadSettings)
      * @return std::vector<std::string> Vector containing file lines
      * @throws std::invalid_argument if file cannot be opened
      */
     inline std::vector<std::string> loadFileIntoVector(
         const std::string& filePath,
-        const std::unordered_map<std::string, std::vector<std::string>>& settingsMap = {},
-        char separator = '\n',
-        bool skipEmptyLines = true)
+        const LoadSettings& settings = {})
     {
         std::ifstream file = openInputFile(filePath);
-        LoadSettings settings(settingsMap, separator, skipEmptyLines);
 
         std::vector<std::string> lines;
         std::string line;
 
-        while (std::getline(file, line, separator))
+        while (std::getline(file, line, settings.separator))
         {
             if (!internal::shouldSkipLine(line, settings))
                 lines.push_back(line);
@@ -284,17 +266,13 @@ namespace stevensFileLib
      * @brief Loads file contents into a vector of integers
      *
      * @param filePath Path to the file
-     * @param settingsMap Settings for filtering lines (currently unused but kept for API compatibility)
-     * @param separator Character used to separate values
-     * @param skipEmptyLines If true, skip empty lines
+     * @param settings Settings for filtering lines (currently unused but kept for API compatibility)
      * @return std::vector<int> Vector containing integer values
      * @throws std::invalid_argument if file cannot be opened
      */
     inline std::vector<int> loadFileIntoVectorOfInts(
         const std::string& filePath,
-        [[maybe_unused]] const std::unordered_map<std::string, std::vector<std::string>>& settingsMap = {},
-        [[maybe_unused]] char separator = '\n',
-        [[maybe_unused]] bool skipEmptyLines = true)
+        [[maybe_unused]] const LoadSettings& settings = {})
     {
         std::ifstream file = openInputFile(filePath);
         std::vector<int> numbers;
@@ -336,7 +314,7 @@ namespace stevensFileLib
      */
     inline std::string getRandomFileLine(const std::string& filePath, char separator = '\n')
     {
-        std::vector<std::string> lines = loadFileIntoVector(filePath, {}, separator, false);
+        std::vector<std::string> lines = loadFileIntoVector(filePath, {.skipEmptyLines = false, .separator = separator});
 
         if (lines.empty())
             throw std::runtime_error("Cannot get random line from empty file: " + filePath);

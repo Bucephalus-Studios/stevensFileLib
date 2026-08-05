@@ -78,7 +78,7 @@ TEST_F(FileOperationsTest, AppendToFile_FileExists_AppendsContent)
 
     stevensFileLib::appendToFile(testFile, "appended content\n");
 
-    auto lines = stevensFileLib::loadFileIntoVector(testFile, {}, '\n', false);
+    auto lines = stevensFileLib::loadFileIntoVector(testFile, {.skipEmptyLines = false});
     ASSERT_EQ(lines.size(), 2);
     EXPECT_EQ(lines[0], "initial content");
     EXPECT_EQ(lines[1], "appended content");
@@ -111,7 +111,7 @@ TEST_F(FileOperationsTest, AppendToFile_MultipleAppends_AllContentPresent)
     stevensFileLib::appendToFile(testFile, "line2\n");
     stevensFileLib::appendToFile(testFile, "line3\n");
 
-    auto lines = stevensFileLib::loadFileIntoVector(testFile, {}, '\n', false);
+    auto lines = stevensFileLib::loadFileIntoVector(testFile, {.skipEmptyLines = false});
     ASSERT_EQ(lines.size(), 3);
     EXPECT_EQ(lines[0], "line1");
     EXPECT_EQ(lines[1], "line2");
@@ -150,7 +150,7 @@ TEST_F(FileOperationsTest, LoadFileIntoVector_EmptyLines_KeepsEmptyWhenDisabled)
 {
     createTestFile(testFile, "line1\n\nline2\n");
 
-    auto lines = stevensFileLib::loadFileIntoVector(testFile, {}, '\n', false);
+    auto lines = stevensFileLib::loadFileIntoVector(testFile, {.skipEmptyLines = false});
 
     ASSERT_EQ(lines.size(), 3);
     EXPECT_EQ(lines[0], "line1");
@@ -162,10 +162,7 @@ TEST_F(FileOperationsTest, LoadFileIntoVector_SkipIfStartsWith_FiltersCorrectly)
 {
     createTestFile(testFile, "# comment\ndata1\n# another comment\ndata2\n");
 
-    std::unordered_map<std::string, std::vector<std::string>> settings;
-    settings["skip if starts with"] = {"#"};
-
-    auto lines = stevensFileLib::loadFileIntoVector(testFile, settings);
+    auto lines = stevensFileLib::loadFileIntoVector(testFile, {.skipIfStartsWith = {"#"}});
 
     ASSERT_EQ(lines.size(), 2);
     EXPECT_EQ(lines[0], "data1");
@@ -176,10 +173,7 @@ TEST_F(FileOperationsTest, LoadFileIntoVector_SkipIfContains_FiltersCorrectly)
 {
     createTestFile(testFile, "good line\nbad line with ERROR\nanother good line\n");
 
-    std::unordered_map<std::string, std::vector<std::string>> settings;
-    settings["skip if contains"] = {"ERROR"};
-
-    auto lines = stevensFileLib::loadFileIntoVector(testFile, settings);
+    auto lines = stevensFileLib::loadFileIntoVector(testFile, {.skipIfContains = {"ERROR"}});
 
     ASSERT_EQ(lines.size(), 2);
     EXPECT_EQ(lines[0], "good line");
@@ -190,11 +184,7 @@ TEST_F(FileOperationsTest, LoadFileIntoVector_MultipleFilters_AppliesAllFilters)
 {
     createTestFile(testFile, "# comment\nvalid data\ndata with ERROR\n// comment\nmore valid data\n");
 
-    std::unordered_map<std::string, std::vector<std::string>> settings;
-    settings["skip if starts with"] = {"#", "//"};
-    settings["skip if contains"] = {"ERROR"};
-
-    auto lines = stevensFileLib::loadFileIntoVector(testFile, settings);
+    auto lines = stevensFileLib::loadFileIntoVector(testFile, {.skipIfStartsWith = {"#", "//"}, .skipIfContains = {"ERROR"}});
 
     ASSERT_EQ(lines.size(), 2);
     EXPECT_EQ(lines[0], "valid data");
@@ -205,7 +195,7 @@ TEST_F(FileOperationsTest, LoadFileIntoVector_CustomSeparator_SplitsCorrectly)
 {
     createTestFile(testFile, "part1|part2|part3");
 
-    auto lines = stevensFileLib::loadFileIntoVector(testFile, {}, '|', false);
+    auto lines = stevensFileLib::loadFileIntoVector(testFile, {.skipEmptyLines = false, .separator = '|'});
 
     ASSERT_EQ(lines.size(), 3);
     EXPECT_EQ(lines[0], "part1");

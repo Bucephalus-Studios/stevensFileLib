@@ -110,9 +110,7 @@ BENCHMARK(LoadFileIntoVector_LargeFile);
 
 static void LoadFileIntoVector_WithFiltering(benchmark::State& state)
 {
-    std::unordered_map<std::string, std::vector<std::string>> settings;
-    settings["skip if starts with"] = {"#", "//"};
-    settings["skip if contains"] = {"SKIP"};
+    stevensFileLib::LoadSettings settings{.skipIfStartsWith = {"#", "//"}, .skipIfContains = {"SKIP"}};
 
     for (auto _ : state)
     {
